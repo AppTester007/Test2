@@ -1,0 +1,1051 @@
+' ------------------------------------------------ List of Functions ------------------------------------------------------------
+'Fn_UpdateTestResult
+'Fn_ResultGenerator
+'Fn_UpdateExcel
+'Fn_CreateResultFile
+'Fn_CreateExcel
+'Fn_CreateHTML
+'Fn_StyleCreator
+'Fn_Create_Header
+'Fn_TableName
+'Fn_QCResultUpdate
+'Fn_QCTestDetails
+'Fn_QCFolderPath
+'Fn_QCInstanceCreation
+'Fn_QCLabInstanceCreate
+'Fn_QCLabStatusChange
+'------------------------------------------------------- End Of List -----------------------------------------------------------
+
+'*************************************************************************************************************
+' Function : Fn_UpdateTestResult
+' Functionality : To Update the test results of particular test case.
+'*************************************************************************************************************
+Function Fn_UpdateTestResult()
+
+	Dim strResult
+
+'  Condition to set the Test  Case Result  by the data obtained from the validation done on application
+		If Not Environment( "teststatusFlag" ) Then
+			Environment("Status") = "Fail"
+            Call Fn_QCTestDetails ( "Update", Environment("TC_NO") &"-Failed;" )
+			Call Fn_QCLabStatusChange( Environment("TC_NO"), Environment("strQCLabSet"), "Failed" )
+		Else
+			Environment("Status") = "Pass"
+            Call Fn_QCTestDetails ( "Update", Environment("TC_NO") &"-Passed;" )
+			Call Fn_QCLabStatusChange( Environment("TC_NO"), Environment("strQCLabSet"), "Passed" )
+		End If
+
+	If Environment( "Output" ) = "Excel" Then
+		Call Fn_UpdateExcel( Fn_ResultGenerator( "General" ) )
+	ElseIf Environment( "Output" ) = "HTML" Then
+		Call Fn_TableName( Fn_ResultGenerator( "General" ), Environment("Status"), "Report" )
+	End If
+
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_ResultGenerator
+' Functionality : To define the test results of execution.
+'*************************************************************************************************************
+Function Fn_ResultGenerator( strType )
+
+'  Test Results to be reported be given here with Semicolon as delimiter seperating the columns
+	If strType = "Header1" Then
+		Fn_ResultGenerator = "Test Case Name;Test Description"
+	ElseIf strType = "Header2" Then
+		Fn_ResultGenerator = "TestStep Description;Expected Result;Actual Result;Status"  ' HeaderValue1;HeaderValu2;...;HeaderValueN
+	ElseIf strType = "General" Then
+		Fn_ResultGenerator = "ResultValue1;ResultValu2;ResultValu3;"& Environment("Status") 'ResultValue1;ResultValu2;...;ResultValueN
+	End If
+
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_UpdateExcel
+' Functionality : To Update the test results of particular test case.
+'*************************************************************************************************************
+Function Fn_UpdateExcel( strResult )
+
+	Dim intRowCnt, intColCnt, strTemp, intI
+	Dim objExcel, objWorkBook, objWorkSheet
+
+	Set objExcel = CreateObject("Excel.Application")
+	Set objWorkBook = objExcel.Workbooks.Open ( Environment( "Result_Loc" ) )
+	Set objWorkSheet = objWorkBook.Worksheets( Environment("strCurModule") )
+	strTemp = Split(strResult,";")
+
+	intRowCnt = objWorkSheet.UsedRange.Rows.Count
+	intColCnt = objWorkSheet.UsedRange.Columns.Count
+
+	For intI = 0 To UBound( strTemp )
+		objWorkSheet.Rows(intRowCnt + 1).Columns(intJ + 1).NumberFormat = "@"
+		objWorkSheet.Rows(intRowCnt + 1).Columns(intI + 1).Value = Cstr( strTemp( intI ) )
+		objWorkSheet.Rows(intRowCnt + 1).Columns(intJ + 1).Font.Size = 10
+		objWorkSheet.Rows(intRowCnt + 1).Columns(intJ + 1).Font.Name = "Calibri"
+		objWorkSheet.Rows(intRowCnt + 1).Columns(intJ + 1).BorderAround Weight = xlThin
+	Next
+
+	objWorkBook.Save
+	objWorkBook.Close
+
+	Set objExcel = Nothing
+	Set objWorkBook = Nothing
+	Set objWorkSheet = Nothing
+
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_CreateResultFile
+' Functionality : To Create a Result of user's choice.
+'*************************************************************************************************************
+Function Fn_CreateResultFile ( )
+
+	If Environment("Output") = "Excel" Then
+		Call Fn_CreateExcel( Fn_ResultGenerator( "Header" ) )
+	ElseIf Environment("Output") = "HTML" Then
+		Call Fn_CreateHTML( "Start", "Report" )
+	End If
+
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_CreateExcel
+' Functionality : To create a excel file for result to be updated.
+'*************************************************************************************************************
+Function Fn_CreateExcel ( strResult )
+
+    Dim objExcel, objWorkbook, objWorkSheet
+	Dim intI, intJ, objFso
+	Dim arrModules
+	Set objFso = CreateObject("Scripting.FileSystemObject")
+	Set objExcel = CreateObject("Excel.Application")
+
+	strTemp = Split(strResult,";")
+    arrModules = Split(Environment( "Modules" ), "@@", -1, 1)
+	Environment( "Result_Loc" ) = ( Environment ( "Result_Location" ) ) &  "Report_"& Replace ( date , "/" , "_" ) & "_" & Replace ( Time , ":" , "_" ) & ".html"
+	
+	Set objWorkbook=objExcel.Workbooks.Add
+	objWorkbook.Worksheets("Sheet1").Delete
+	objWorkbook.Worksheets("Sheet2").Delete
+	For intI = 0 To UBound( arrModules )
+		If Trim( arrModules( intI ) ) <> "" Then
+			Set objWorkSheet = objWorkbook.Worksheets.Add
+			objWorkSheet.Name = Trim( arrModules( intI ) )
+			For intJ = 0 To UBound(strTemp)					
+				objWorkSheet.Rows(1).Columns(intJ + 1).Value = strTemp(intJ)
+				objWorkSheet.Rows(1).Columns(intJ + 1).Font.Bold = True
+				objWorkSheet.Rows(1).Columns(intJ + 1).Font.Size = 10
+				objWorkSheet.Rows(1).Columns(intJ + 1).Font.Name = "Calibri"
+				objWorkSheet.Rows(1).Columns(intJ + 1).Interior.Color = 49407
+				objWorkSheet.Rows(1).Columns(intJ + 1).BorderAround Weight=xlThin
+			Next
+		End If
+	Next
+	objWorkbook.Worksheets("Sheet3").Delete
+	objWorkbook.SaveAs( Environment( "Result_Loc" ) )
+	objWorkbook.Save
+	objWorkbook.Close
+
+	Set objWorkSheet = Nothing
+	Set objWorkbook = Nothing
+	Set objExcel = Nothing
+	Set objFso = Nothing
+	Environment ( "Fail_Count" ) = 0
+	Environment ( "Pass_Count" ) = 0
+
+End Function
+
+'*************************************************************************************************************
+'	Function						: 	Fn_CreateHTML
+'	Description	                :	To create HTML report file for the current test run
+'  	Input Argument(s)	 :	 strFlowStatus - indicates whether to write header or summary table
+'                                               depending on the value passed 
+'											   Start indicates start of the test and writes test details and output table header 
+'												End indicates end of test and writes the summary table in the HTML report
+' 	Called Function			:   Fn_Create_Header
+'	Calling Function		:   Fn_CreateResult
+'	Return Value(s)		  :	   None
+'*************************************************************************************************************
+Function Fn_CreateHTML( strFlowStatus,  strResName )
+		
+	Const ForReading = 1, ForWriting = 2, ForAppending = 8
+	Const TristateUseDefault = -2, TristateTrue = -1, TristateFalse = 0 'report writing
+	Dim objFSO1
+	Dim objGetFile
+	Dim	objOPFile
+	Dim insertLine
+	Dim arrModules
+	Dim intI
+	Dim teststatus
+	
+	insertLine = ""
+	arrModules = Split(Environment( "Modules" ), "@@", -1, 1)
+	If LCase ( strFlowStatus )= "start" Then
+		
+		ReDim teststatus(UBound(arrModules)+1,4)
+		For intI = 0 To UBound(arrModules)
+			teststatus(intI,0)=0
+			teststatus(intI,1)=0
+			teststatus(intI,2)=0
+			teststatus(intI,3)=0
+		Next
+		
+		Set objFSO1 = CreateObject ( "Scripting.FileSystemObject" )
+	'	Result file location
+		Environment( strResName ) = ( Environment ( "Result_Location" ) ) &  strResName  &"_"& Replace ( date , "/" , "_" ) & "_" & Replace ( Time , ":" , "_" ) & ".html"
+	
+	'	Creating the result file
+		objFSO1.CreateTextFile Environment ( strResName ) 
+		Set objGetFile = objFSO1.GetFile ( Environment ( strResName ) )
+	
+	'	Openning the File to write TestDetails, ToolDetail, UserDetails
+		Set objOPFile = objGetFile.OpenAsTextStream ( ForWriting , TristateUseDefault )
+		
+		insertLine = insertLine &  " <!DOCTYPE html PUBLIC -//W3C//DTD XHTML 1.0 Strict//EN"& Chr(10)
+		insertLine = insertLine &  " http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd> "& Chr(10)
+		insertLine = insertLine &  " <HTML><HEAD>"& Chr(10)
+		insertLine = insertLine &  " <title>iGen Automation Test Report</title>"& Chr(10)
+		insertLine = Fn_StyleCreator( insertLine )
+		insertLine = insertLine &  " </HEAD><BODY>"& Chr(10)
+		insertLine = insertLine &  " <P><H4><CENTER><FONT face=Verdana   size=4 color=#ffffff>iGen Automation Test Report</FONT></CENTER></H4></P>"& Chr(10)
+		insertLine = insertLine &  " <div id=""tabbed_box_1"" class=""tabbed_box"">"& Chr(10)
+		insertLine = insertLine &  " <div class=""tabbed_area"">"& Chr(10)
+		insertLine = insertLine &  " <ul class=""tabs"">"& Chr(10)
+	    
+		insertLine = insertLine &  " <script type=""text/javascript""></script>"& Chr(10)
+		insertLine = insertLine &  " <li><a href=""javascript:tabSwitch('tab_1', 'content_1');"" id=""tab_1"" class=""active""> Summary </a></li>"& Chr(10)
+		For intI=0 To UBound( arrModules )
+			insertLine = insertLine &  " <li><a href=""javascript:tabSwitch('tab_"& (intI+2) &"', 'content_"& (intI+2) &"');"" id=""tab_"& (intI+2) &""">"& arrModules(intI) &"</a></li>"& Chr(10)
+		Next
+		insertLine = insertLine &  " </ul>"& Chr(10)
+		
+		objOPFile.writeLine( insertLine )
+		objOPFile.Close
+		Set objOPFile  = Nothing
+		Set objFSO1 = Nothing
+		Environment( "OvrTstStsReport" ) = teststatus
+			
+	ElseIf LCase ( strFlowStatus )= "modulestart" Then
+	
+		insertLine = insertLine &  " <div id= ""content_"& (Environment( "intCurModule" )+2) &""" class=""content"">"& Chr(10)
+		insertLine = insertLine &  " <ul>"& Chr(10)
+		insertLine = insertLine &  " <li><TABLE border=0 cellSpacing=1 cellPadding=3 width=""100%"">"& Chr(10)
+		insertLine = insertLine &  " <TBody><TR>"& Chr(10)
+		insertLine = insertLine &  " <TD bgColor=white width=""6%"">"& Chr(10)
+		insertLine = insertLine &  " <IMG src=""http://mysource.bnymellon.net/nav/img/tbnymlogo.gif""></TD>"& Chr(10)
+		insertLine = insertLine &  " <TD><TABLE height=10 width=""100%"" border=0 cellSpacing=1 cellPadding=3>"& Chr(10)
+		insertLine = insertLine &  " <TBody>"& Chr(10)
+		insertLine = insertLine &  " <TR>"& Chr(10)
+		insertLine = insertLine &  " <TD vAlign=center  align=left  width='3%' height=20>"& Chr(10)
+		insertLine = insertLine &  " <FONT face=Verdana color=#0033CC size=2><B>Execution Date : "
+		insertLine = insertLine &  CStr( Date )
+		insertLine = insertLine &  " <BR><FONT face=Verdana color=#0033CC size=2><B>Executed By : "
+		insertLine = insertLine &  Environment( "UserName" )
+		insertLine = insertLine &  " </B></FONT></TD>"& Chr(10)
+		insertLine = insertLine &  " <TD vAlign=center  align=left  width='3%' height=20>"& Chr(10)
+		insertLine = insertLine &  " <FONT face=Verdana color=#0033CC size=2><B>Tool Name: "
+		insertLine = insertLine &  Environment( "ProductName" )
+		insertLine = insertLine & "<BR></FONT>"& Chr(10)
+		insertLine = insertLine &  " <FONT face=Verdana color=#0033CC size=2><B>Tool Version: "
+		insertLine = insertLine &  Environment( "ProductVer" )
+		insertLine = insertLine &  " </B></FONT></TD></TR>"& Chr(10)
+		insertLine = insertLine &  " </TBody></Table>"& Chr(10)
+		insertLine = insertLine &  " </TD></TR></TBody></Table></li>"& Chr(10)
+		
+		Set objFSO1 = CreateObject ( "Scripting.FileSystemObject" )
+		Set objGetFile = objFSO1.GetFile ( Environment ( strResName ) )
+		Set objOPFile = objGetFile.OpenAsTextStream ( ForAppending , TristateUseDefault )
+		objOPFile.writeLine( insertLine )
+		objOPFile.Close
+		Set objOPFile  = Nothing
+		Set objGetFile = Nothing
+		Set objFSO1 = Nothing			
+
+	ElseIf LCase ( strFlowStatus ) = "moduleend" Then
+	
+		teststatus = Environment( "OvrTstStsReport" )
+		insertLine = insertLine &  " </TBody></Table></li>"& Chr(10)
+		insertLine = insertLine &  " <li><TABLE  width='100%' >"& Chr(10)
+		insertLine = insertLine &  " <P><B><U><Center><FONT face=Verdana color=#0033CC  size=4>Result</FONT></Centert></U></B></P>"& Chr(10)
+		insertLine = insertLine &  " </TABLE>"& Chr(10)
+		insertLine = insertLine &  " <TABLE align=center valign=center border=0 cellpadding=1 cellspacing=1>"& Chr(10)
+		insertLine = insertLine &  " <TR><TD align=center valign=center>"& Chr(10)
+		insertLine = insertLine &  " <div id=""chart_module"& (Environment( "intCurModule" )+1) &""" style=""width: 1200px; height: 200px;"">"& Chr(10)
+		insertLine = insertLine &  " <Template name=""ModuleName"& (Environment( "intCurModule" )+1) &""">"& Chr(10)
+		insertLine = insertLine &  " <input id=""testpass"& (Environment( "intCurModule" )+1) &""" value="& teststatus(Environment( "intCurModule" ),0) &" />"& Chr(10)
+		insertLine = insertLine &  " <input id=""testfail"& (Environment( "intCurModule" )+1) &""" value="& teststatus(Environment( "intCurModule" ),1) &" />"& Chr(10)
+		insertLine = insertLine &  " <input id=""validationpass"& (Environment( "intCurModule" )+1) &""" value="& teststatus(Environment( "intCurModule" ),2) &" />"& Chr(10)
+		insertLine = insertLine &  " <input id=""validationfail"& (Environment( "intCurModule" )+1) &""" value="& teststatus(Environment( "intCurModule" ),3) &" />"& Chr(10)
+		insertLine = insertLine &  " </Template></div> </TD></TR>"& Chr(10)
+		insertLine = insertLine &  " </Table></li></ul>"& Chr(10)
+		insertLine = insertLine &  " </div>"& Chr(10)
+
+		Set objFSO1 = CreateObject ( "Scripting.FileSystemObject" )
+		Set objGetFile = objFSO1.GetFile ( Environment ( strResName ) )
+		Set objOPFile = objGetFile.OpenAsTextStream ( ForAppending , TristateUseDefault )
+		objOPFile.writeLine( insertLine )
+		objOPFile.Close
+		Set objOPFile  = Nothing
+		Set objGetFile = Nothing
+		Set objFSO1 = Nothing	
+		
+	ElseIf LCase ( strFlowStatus ) = "end" Then
+		
+		teststatus = Environment( "OvrTstStsReport" )		
+		insertLine = insertLine &  " <div id= ""content_1"" class=""content"">"& Chr(10)
+		insertLine = insertLine &  " <ul>"& Chr(10)
+		insertLine = insertLine &  " <li><TABLE  width='100%' >"& Chr(10)
+		insertLine = insertLine &  " <P><B><U><Center><FONT face=Verdana color=#0033CC  size=4>Execution Status</FONT></Center></U></B></P>"& Chr(10)
+		insertLine = insertLine &  " </Table></li>"& Chr(10)
+		insertLine = insertLine &  " <li><TABLE align=center valign=center border=0 cellpadding=1 cellspacing=1 width= ""100%"" height= ""100%"">"& Chr(10)
+		insertLine = insertLine &  " <TR><TD width= ""100%"" height= ""100%"">"& Chr(10)
+		insertLine = insertLine &  " <div id=""chart_summary"" style=""width: 1200px; height: 500px;"">"& Chr(10)
+		insertLine = insertLine &  " <Template name=""Summary"">"& Chr(10)
+
+		For intI=0 To UBound( arrModules )
+			insertLine = insertLine &  " <input id=""module"& (intI+1) &"testpass"& (intI+1) &""" value="& teststatus(intI,0) &" />"& Chr(10)
+			insertLine = insertLine &  " <input id=""module"& (intI+1) &"testfail"& (intI+1) &""" value="& teststatus(intI,1) &" />"& Chr(10)
+			insertLine = insertLine &  " <input id=""module"& (intI+1) &"validationpass"& (intI+1) &""" value="& teststatus(intI,2) &" />"& Chr(10)
+			insertLine = insertLine &  " <input id=""module"& (intI+1) &"validationfail"& (intI+1) &""" value="& teststatus(intI,3) &" />"& Chr(10)
+		Next
+		
+		insertLine = insertLine &  " </Template>"& Chr(10)
+		insertLine = insertLine &  " </div></TD></TR>"& Chr(10)
+		insertLine = insertLine &  " </Table></li></ul>"& Chr(10)
+		insertLine = insertLine &  " </div>"& Chr(10)
+		insertLine = insertLine &  " </div>"& Chr(10)
+		insertLine = insertLine &  " </div>"& Chr(10)
+		insertLine = insertLine &  " </body></html>"& Chr(10)
+
+		Set objFSO1 = CreateObject ( "Scripting.FileSystemObject" )
+		Set objGetFile = objFSO1.GetFile ( Environment ( strResName ) )
+		Set objOPFile = objGetFile.OpenAsTextStream ( ForAppending , TristateUseDefault )
+		objOPFile.writeLine( insertLine )
+		objOPFile.Close
+		Set objOPFile  = Nothing
+		Set objGetFile = Nothing
+		Set objFSO1 = Nothing
+		Environment( "Result_Loc" ) = Environment( strResName )
+
+	End If
+
+End Function
+
+'*************************************************************************************************************
+'	Function						: 	Fn_StyleCreator
+'	Description	                :	To create Tab Styles in the HTML report
+'  	Input Argument(s)	 :	 1 ( File Object )
+' 	Called Function			:   None
+'	Calling Function		:   Fn_CreateHTML
+'	Return Value(s)		  :	   None
+'*************************************************************************************************************
+Function Fn_StyleCreator( insertLine )
+
+	Dim intI
+	Dim strTemp
+	Dim arrModules
+	
+	arrModules = Split(Environment( "Modules" ), "@@", -1, 1)
+
+	insertLine = Chr(10) & insertLine &  " <Style>"& Chr(10)
+	insertLine = insertLine &  " body{"& Chr(10)
+	insertLine = insertLine &  " background-image:url(images/background.jpg);"& Chr(10)
+	insertLine = insertLine &  " background-repeat:no-repeat;"& Chr(10)
+	insertLine = insertLine &  " background-position:top center;"& Chr(10)
+	insertLine = insertLine &  " background-color:#4B4B4B;"& Chr(10)
+	insertLine = insertLine &  " margin:40px;}"& Chr(10)
+	insertLine = insertLine &  " #tabbed_box{"& Chr(10)
+	insertLine = insertLine &  " margin: 0px auto 0px auto;"& Chr(10)
+	insertLine = insertLine &  " width:300px;}"& Chr(10)
+	insertLine = insertLine &  " .tabbed_box h4 {"& Chr(10)
+	insertLine = insertLine &  " font-family:Arial, Helvetica, sans-serif;"& Chr(10)
+	insertLine = insertLine &  " font-size:23px;"& Chr(10)
+	insertLine = insertLine &  " color:#ffffff;"& Chr(10)
+	insertLine = insertLine &  " letter-spacing:-1px;"& Chr(10)
+	insertLine = insertLine &  " margin-bottom:10px;}"& Chr(10)
+	insertLine = insertLine &  " .tabbed_box h4 small{"& Chr(10)
+	insertLine = insertLine &  " color:#e3e9ec;"& Chr(10)
+	insertLine = insertLine &  " font-weight:normal;"& Chr(10)
+	insertLine = insertLine &  " font-size:9px;"& Chr(10)
+	insertLine = insertLine &  " font-family:Verdana, Arial, Helvetica, sans-serif;"& Chr(10)
+	insertLine = insertLine &  " text-transform:uppercase;"& Chr(10)
+	insertLine = insertLine &  " position:relative;"& Chr(10)
+	insertLine = insertLine &  " top:-4px;"& Chr(10)
+	insertLine = insertLine &  " left:6px;"& Chr(10)
+	insertLine = insertLine &  " letter-spacing:0px;}"& Chr(10)
+	insertLine = insertLine &  " .tabbed_area{"& Chr(10)
+	insertLine = insertLine &  " border:1px solid #494E52;"& Chr(10)
+	insertLine = insertLine &  " background-color:#8D9091;"& Chr(10)
+	insertLine = insertLine &  " padding:8px;}"& Chr(10)
+	insertLine = insertLine &  " ul.tabs {margin:0px; padding:0px;}"& Chr(10)
+	insertLine = insertLine &  " ul.tabs li{"& Chr(10)
+	insertLine = insertLine &  " list-style:none;"& Chr(10)
+	insertLine = insertLine &  " display:inline;}"& Chr(10)
+	insertLine = insertLine &  " ul.tabs li a{"& Chr(10)
+	insertLine = insertLine &  " background-color:#4B4B4B;"& Chr(10)
+	insertLine = insertLine &  " color:#ffebb5;"& Chr(10)
+	insertLine = insertLine &  " padding:8px 14px 8px 14px;"& Chr(10)
+	insertLine = insertLine &  " text-decoration:none;"& Chr(10)
+	insertLine = insertLine &  " font-size:9px;"& Chr(10)
+	insertLine = insertLine &  " font-family:Verdana, Arial, Helvetica, sans-serif;"& Chr(10)
+	insertLine = insertLine &  " font-weight:bold;"& Chr(10)
+	insertLine = insertLine &  " text-transform:uppercase;"& Chr(10)
+	insertLine = insertLine &  " border:1px solid #464c54;}"& Chr(10)
+	insertLine = insertLine &  " ul.tabs li a:hover{"& Chr(10)
+	insertLine = insertLine &  " background-color:#2f343a;"& Chr(10)
+	insertLine = insertLine &  " border-color:#2f343a;}"& Chr(10)
+	insertLine = insertLine &  " ul.tabs li a.active{"& Chr(10)
+	insertLine = insertLine &  " background-color:#ffffff;"& Chr(10)
+	insertLine = insertLine &  " color:#282e32;"& Chr(10)
+	insertLine = insertLine &  " border:1px solid #464c54;"& Chr(10)
+	insertLine = insertLine &  " border-bottom: 1px solid #ffffff;}"& Chr(10)
+	insertLine = insertLine &  " .content{"& Chr(10)
+	insertLine = insertLine &  " background-color:#ffffff;"& Chr(10)
+	insertLine = insertLine &  " padding:10px;"& Chr(10)
+	insertLine = insertLine &  " border:1px solid #464c54;}"& Chr(10)
+	insertLine = insertLine &  " ul.tabs{"& Chr(10)
+	insertLine = insertLine &  " margin:0px; padding:0px;"& Chr(10)
+	insertLine = insertLine &  " margin-top:5px;"& Chr(10)
+	insertLine = insertLine &  " margin-bottom:6px;}"& Chr(10)
+	insertLine = insertLine &  " .content ul{"& Chr(10)
+	insertLine = insertLine &  " margin:0px;"& Chr(10)
+	insertLine = insertLine &  " padding:0px 20px 0px 20px;}"& Chr(10)
+	insertLine = insertLine &  " .content ul li{"& Chr(10)
+	insertLine = insertLine &  " list-style:none;"& Chr(10)
+	insertLine = insertLine &  " border-bottom:1px solid #d6dde0;"& Chr(10)
+	insertLine = insertLine &  " padding-top:15px;"& Chr(10)
+	insertLine = insertLine &  " padding-bottom:15px;"& Chr(10)
+	insertLine = insertLine &  " font-size:13px;}"& Chr(10)
+	insertLine = insertLine &  " .content ul li a{"& Chr(10)
+	insertLine = insertLine &  " text-decoration:none;"& Chr(10)
+	insertLine = insertLine &  " color:#3e4346;}"& Chr(10)
+	insertLine = insertLine &  " .content ul li a small{"& Chr(10)
+	insertLine = insertLine &  " color:#8b959c;"& Chr(10)
+	insertLine = insertLine &  " font-size:9px;"& Chr(10)
+	insertLine = insertLine &  " text-transform:uppercase;"& Chr(10)
+	insertLine = insertLine &  " font-family:Verdana, Arial, Helvetica, sans-serif;"& Chr(10)
+	insertLine = insertLine &  " position:relative;"& Chr(10)
+	insertLine = insertLine &  " left:4px;"& Chr(10)
+	insertLine = insertLine &  " top:0px;}"& Chr(10)
+	insertLine = insertLine &  " .content ul li:last-child {border-bottom:none;} "& Chr(10)
+	
+	strTemp = ""
+	For intI=1 To (UBound( arrModules ) + 1)
+		strTemp = strTemp &",#content_"& (intI+1)
+	Next
+'	strTemp = strTemp &",#content_"& (UBound( arrModules ) + 2)
+	insertLine = insertLine & " " & Mid(strTemp, 2)
+	insertLine = insertLine &  " { display:none; }"& Chr(10)
+	strTemp=" "
+	
+	insertLine = insertLine &  " </Style>"& Chr(10) & Chr(10)
+	insertLine = insertLine &  " <script type=""text/javascript"" src=""https://www.google.com/jsapi""></script>"& Chr(10)
+	insertLine = insertLine &  " <script type=""text/javascript"">"& Chr(10)
+	insertLine = insertLine &  " google.load(""visualization"", ""1"", {packages:[""corechart""]});"& Chr(10)
+	insertLine = insertLine &  " google.setOnLoadCallback(fn_summary);"& Chr(10)
+	For intI=0 To UBound( arrModules )
+		insertLine = insertLine &  " google.setOnLoadCallback(fn_module"& (intI+1) &");"& Chr(10)
+	Next
+	insertLine = insertLine &  " function fn_summary() {"& Chr(10)
+	insertLine = insertLine &  " var data = google.visualization.arrayToDataTable(["& Chr(10)
+	insertLine = insertLine &  " ['Module','TestCase Passed','TestCase Failed','Validation Passed','Validation Failed'],"& Chr(10)
+	strTemp = ""
+	For intI=0 To UBound( arrModules )
+		strTemp = strTemp + " ['"& arrModules(intI) &"',parseInt(document.getElementById('module"& (intI+1) &"testpass"& (intI+1) &"').value),parseInt(document.getElementById('module"& (intI+1) &"testfail"& (intI+1) &"').value),parseInt(document.getElementById('module"& (intI+1) &"validationpass"& (intI+1) &"').value),parseInt(document.getElementById('module"& (intI+1) &"validationfail"& (intI+1) &"').value)],"& Chr(10)
+	Next
+	insertLine = insertLine &  Mid(strTemp,1, Len(strTemp)-1) & Chr(10)
+	insertLine = insertLine &  " ]);"& Chr(10)
+	insertLine = insertLine &  " var options = {"& Chr(10)
+	insertLine = insertLine &  " title: 'iGen Framework Test Report',"& Chr(10)
+	insertLine = insertLine &  " hAxis: {title: 'Module', titleTextStyle: {color: 'red'}},"& Chr(10)
+	insertLine = insertLine &  " colors:['#69BE28','#E65032','#FFC300','#4B4B4B']"& Chr(10)
+	insertLine = insertLine &  " };"& Chr(10)
+	insertLine = insertLine &  " var chart = new google.visualization.ColumnChart(document.getElementById('chart_summary'));"& Chr(10)
+	insertLine = insertLine &  " chart.draw(data, options);"& Chr(10)
+	insertLine = insertLine &  " }"& Chr(10)
+	For intI=0 To UBound( arrModules )
+		insertLine = insertLine &  " function fn_module"& (intI+1) &"() {"& Chr(10)
+		insertLine = insertLine &  " var data = google.visualization.arrayToDataTable(["& Chr(10)
+		insertLine = insertLine &  " ['Validation','Pass','Fail'],"& Chr(10)
+		insertLine = insertLine &  " ['Test Cases',parseInt(document.getElementById('testpass"& (intI+1) &"').value),parseInt(document.getElementById('testfail"& (intI+1) &"').value)],"& Chr(10)
+		insertLine = insertLine &  " ['Validations',parseInt(document.getElementById('validationpass"& (intI+1) &"').value),parseInt(document.getElementById('validationfail"& (intI+1) &"').value)]"& Chr(10)
+		insertLine = insertLine &  " ]);"& Chr(10)
+		insertLine = insertLine &  " var options = {"& Chr(10)
+		insertLine = insertLine &  " title: '"& arrModules(intI) &"',"& Chr(10)
+		insertLine = insertLine &  " vAxis: {title: 'Validation',  titleTextStyle: {color: 'red'}},"& Chr(10)
+		insertLine = insertLine &  " colors:['#69BE28','#E65032']"& Chr(10)
+		insertLine = insertLine &  " };"& Chr(10)
+		insertLine = insertLine &  " var chart = new google.visualization.BarChart(document.getElementById('chart_module"& (intI+1) &"'));"& Chr(10)
+		insertLine = insertLine &  " chart.draw(data, options);"& Chr(10)
+		insertLine = insertLine &  " }"& Chr(10)
+	Next	
+	insertLine = insertLine &  " function tabSwitch(new_tab, new_content)"& Chr(10)
+	insertLine = insertLine &  " {	"& Chr(10)
+	For intI=0 To (UBound( arrModules ) + 1)
+		insertLine = insertLine &  " document.getElementById('content_"& (intI+1) &"').style.display = 'none';"& Chr(10)
+		insertLine = insertLine &  " document.getElementById('tab_"& (intI+1) &"').className = '';"& Chr(10)
+	Next
+	'insertLine = insertLine &  " document.getElementById('content_"& (UBound( arrModules )+2) &"').style.display = 'none';"
+	'insertLine = insertLine &  " document.getElementById('tab_"& (UBound( arrModules )+2) &"').className = '';"
+	insertLine = insertLine &  " document.getElementById(new_content).style.display = 'block';			"& Chr(10)
+	insertLine = insertLine &  " document.getElementById(new_tab).className = 'active';		"& Chr(10)
+	insertLine = insertLine &  " }"& Chr(10)
+	insertLine = insertLine &  " </script>"& Chr(10) & Chr(10)
+	
+	Fn_StyleCreator = insertLine
+	
+End Function
+
+
+'*************************************************************************************************************
+'	Function						: 	Fn_Create_Header
+'	Description	                :	To create header in the HTML report
+'  	Input Argument(s)	 :	 None
+' 	Called Function			:   None
+'	Calling Function		:   Fn_CreateHTML
+'	Return Value(s)		  :	   None
+'*************************************************************************************************************
+Function Fn_Create_Header(strResName)
+	
+	Dim insertLine
+	Const ForReading = 1, ForWriting = 2, ForAppending = 8
+	Const TristateUseDefault = -2, TristateTrue = -1, TristateFalse = 0
+	Dim objFSO, objGetFile, objOPFile
+	
+	insertLine=""	
+	insertLine = insertLine &  " </TBody>"& Chr(10)
+	insertLine = htmlResultTableCreate(insertLine)
+	
+	Set objFSO = CreateObject ( "Scripting.FileSystemObject" )
+	Set objGetFile = objFSO.GetFile ( Environment ( strResName ) )
+	Set objOPFile = objGetFile.OpenAsTextStream ( ForAppending , TristateUseDefault )
+	objOPFile.writeLine( insertLine )
+	objOPFile.Close
+	Set objOPFile  = Nothing
+	Set objGetFile = Nothing
+	Set objFSO = Nothing
+
+End Function
+
+Function htmlResultTableCreate(insertLine)
+	
+	insertLine = insertLine &  " </Table></li>"& Chr(10)
+	insertLine = insertLine &  " <li><TABLE borderColorLight=#008080 border=0 cellSpacing=1 cellPadding=3 width=""100%"">"& Chr(10)
+	insertLine = insertLine &  " <TBody>"& Chr(10)
+	htmlResultTableCreate = insertLine
+	
+End Function
+
+'*************************************************************************************************************
+'	Function						:	 Fn_TableName
+'	Description	                :	To insert the result for every testcase
+'  	Input Argument(s)	 :	   strTName -  holds all result/header values to be written into HTML file
+'												strRName -  If value is "General" strTName is treated as result value
+'																		If value is "Header" strTName is treated as column header 
+' 	Called Function			:   N/A
+'	Calling Function		:   Fn_CreateResult / Fn_CreateHTML
+'	Return Value(s)		  :	   None
+'*************************************************************************************************************
+Function Fn_TableName(strTName , strRName, strResName)
+	
+	Dim insertLine
+	Const ForReading = 1, ForWriting = 2, ForAppending = 8
+	Const TristateUseDefault = -2, TristateTrue = -1, TristateFalse = 0
+	Dim objFSO, objGetFile, objOPFile
+	
+	insertLine=""	
+	If CStr( LCase( strRName ) ) = "header1" Then
+		insertLine = insertLine &  " </TBody>"& Chr(10)
+		insertLine = htmlResultTableCreate(insertLine)
+	End If	
+	insertLine = insertLine & insetResultTableRow(strTName,strRName)
+	
+	Set objFSO = CreateObject ( "Scripting.FileSystemObject" )
+	Set objGetFile = objFSO.GetFile ( Environment ( strResName ) )
+	Set objOPFile = objGetFile.OpenAsTextStream ( ForAppending , TristateUseDefault )
+	objOPFile.writeLine( insertLine )
+	objOPFile.Close
+	Set objOPFile  = Nothing
+	Set objGetFile = Nothing
+	Set objFSO = Nothing	
+	
+End Function
+
+Function insetResultTableRow(resultArgs , strType)
+
+	Dim insertLine
+	Dim temp
+	Dim teststatus
+	
+	temp=""
+	insertLine=""
+	If (InStr( 1, LCase( strType ), "header2", 1 ) >0) Or (InStr( 1, LCase( strType ), "pass", 1 ) >0) Or (InStr( 1, LCase( strType ), "fail", 1 ) >0) Then
+		temp = " COLS = ""6"""
+	End If
+	
+	teststatus = Environment( "OvrTstStsReport" )
+	insertLine = insertLine &  " <TR"& temp &">"& Chr(10)
+	args = Split(resultArgs,";")
+	For i=0 To UBound(args)
+		Select Case (strType)
+		
+			Case "Header":
+				insertLine = insertLine &  " <TD vAlign=center align=middle width='3%' bgColor=#e1e1e1 height=30><FONT face=Verdana  color=#0033CC  size=1><B>"& args(i) &"</B></FONT></TD>"& Chr(10)
+				
+			Case "Header1":
+				insertLine = insertLine &  " <TD vAlign=center align=left bgColor=#eeeeee width=""30%""><FONT size=2 face=CALIBRI><B>"& args(i) &"</B></FONT></TD>"& Chr(10)
+				If i=0 Then
+					insertLine = insertLine &  " <TD vAlign=center align=left bgColor=#eeeeee colSpan=5><FONT size=2 face=CALIBRI><B>"& Environment( "TC_NO" ) &"</B></FONT></TD></TR>"& Chr(10)
+				Else
+					insertLine = insertLine &  " <TD vAlign=center align=left bgColor=#eeeeee colSpan=5><FONT size=2 face=CALIBRI><B>"& Environment( "Description" ) &"</B></FONT></TD></TR>"& Chr(10)
+				End If
+
+			Case "Header2":
+				insertLine = insertLine &  " <TD vAlign=center align=center bgColor=#bbbbbb width=""25%""><FONT color=black size=2 face=CALIBRI><B>"& args(i) &"</B></FONT></TD>"& Chr(10)
+			
+			Case "Footer":
+				insertLine = insertLine &  " <TD vAlign=center align=center width='3%' bgColor=#e1e1e1 height=30><FONT face=Verdana  color=#0033CC  size=2>"& args(i) &"</FONT></TD>"& Chr(10)
+				
+			Case "Pass", "Passed":
+				If (CStr( LCase( args(i) ) ) = "pass") Or (CStr( LCase( args(i) ) ) = "passed") Then
+					insertLine = insertLine &  " <TD vAlign=center align=center bgColor=#eeeeee width=""7%""><FONT color=Green size=5 face=""WINGDINGS 2"">P</FONT><FONT color=Green size=2 face=CALIBRI><B>"& args(i) &"</B></FONT></TD></TR>"& Chr(10)
+					teststatus(Environment( "intCurModule" ),2) = teststatus(Environment( "intCurModule" ),2)+1
+				Else
+					insertLine = insertLine &  " <TD vAlign=center align=left bgColor=#eeeeee width=""30%""><FONT size=2 face=CALIBRI> "& args(i) &"</FONT></TD>"& Chr(10)
+				End If
+			
+			Case "Fail", "Failed":
+				If (CStr( LCase( args(i) ) ) = "fail") Or (CStr( LCase( args(i) ) ) = "failed") Then
+					insertLine = insertLine &  " <TD vAlign=center align=center bgColor=#eeeeee width=""7%""><FONT color=Red size=5 face=""WINGDINGS 2"">O</FONT><FONT color=Red size=2 face=CALIBRI><B>"& args(i) &"</B></FONT></TD></TR>"& Chr(10)
+					teststatus(Environment( "intCurModule" ),3)=teststatus(Environment( "intCurModule" ),3)+1
+					Environment( "teststatusFlag" ) = False
+				Else
+					insertLine = insertLine &  " <TD vAlign=center align=left bgColor=#eeeeee width=""30%""><FONT size=2 face=CALIBRI> "& args(i) &"</FONT></TD>"& Chr(10)
+				End If
+				
+		End Select
+	Next
+	If Not CStr( LCase( strRName ) ) = "header1" Then
+		insertLine = insertLine &  " </TR>"& Chr(10)
+	End If
+	
+	Environment( "OvrTstStsReport" ) = teststatus
+	insetResultTableRow = insertLine
+	
+End Function
+
+'************************************************************************************************************************************
+'Function Name : Fn_QCResultUpdate 
+'Purpose : To Upload Test Result in ALM.
+'************************************************************************************************************************************
+Function Fn_QCResultUpdate()
+
+	On Error Resume Next
+	Dim ObjCurrentTest
+	Dim ObjattachmentPath
+	Dim ObjAttch
+	Dim qcConnect
+	Dim qcTreeMgr
+	Dim qcTestFactory
+	Dim qcLabTreeMgr
+	Dim qcLabFolder
+	Dim qcTestSetFactory
+	Dim qcFilter
+	Dim qcLst
+	Dim qcTestSet
+	Dim qctestInstanceFctry
+	Dim pTestInTestSetObj
+	Dim intTotalCaseCount
+	Dim intI
+	Dim strTemp
+	Dim strqcTempStatus
+	Dim pTestLst
+	Dim pTestItem
+	
+	If Setting("IsInTestDirectorTest") Then
+		Set ObjCurrentTest = QCUtil.CurrentTestSetTest
+		Set ObjattachmentPath = ObjCurrentTest.Attachments
+		Set ObjAttch = ObjattachmentPath.AddItem(Null)
+		ObjAttch.FileName = Environment("Result_Loc")
+		ObjAttch.Type = 1
+		ObjAttch.Post
+		ObjAttch.Refresh
+	
+	ElseIf LCase( Environment( "ALMUpdate" ) ) = "yes" Then
+		
+		strQCLabPath = Environment("strQCLabPath")
+		UID = Environment("UID")
+		Pwd = Environment("Pwd")
+		Domain =  Environment("Domain")
+		Project = Environment("Project")
+	
+		Set qcConnect = CreateObject("TDAPIOLE80.TDConnection")
+		qcConnect.InitConnectionEx Environment("ALMURL")
+		qcConnect.Login  UID, Pwd
+		qcConnect.Connect Domain , Project
+	
+		If (qcConnect.connected <> True) Then		
+			Print "QC Project Failed to Connect"			
+		Else	
+			Set qcTreeMgr = qcConnect.TreeManager 
+			Set qcTestFactory = qcConnect.TestFactory 
+			Set qcLabTreeMgr = qcConnect.TestSetTreeManager
+			Set qcLabFolder = qcLabTreeMgr.NodeByPath( strQCLabPath )
+			Set qcTestSetFactory = qcLabFolder.TestSetFactory
+			Set qcFilter = qcTestSetFactory.Filter
+			qcFilter.Filter("CY_CYCLE") = "'"& Environment("strQCLabSet") &"'" 'strQCTestName
+		
+			Set qcLst = qcTestSetFactory.NewList(qcFilter.Text)
+			Set qcTestSet = qcLst.Item(1)		
+			Set qctestInstanceFctry = qcTestSet.TSTestFactory
+			Set pTestItem = qctestInstanceFctry.Filter 		
+			pTestItem.Filter("TS_NAME") =  "'"& Environment("TC_NO") &"'" 'Trim( CStr( strTempTstDetails( 0 ) ) )
+			Set pTestLst = qctestInstanceFctry.NewList( pTestItem.Text )
+			Set pTestInTestSetObj = pTestLst.Item( 1 )
+			
+			Set ObjattachmentPath = pTestInTestSetObj.Attachments
+			Set ObjAttch = ObjattachmentPath.AddItem( Null )
+			ObjAttch.FileName = Environment("Result_Loc")
+			ObjAttch.Type = 1
+			ObjAttch.Post
+			ObjAttch.Refresh
+			
+			Set pTestItem = Nothing
+			Set pTestLst = Nothing
+			Set pTestInTestSetObj = Nothing
+					
+			Set qctestInstanceFctry = Nothing
+			Set qcTestSet = Nothing
+			Set qcLst = Nothing
+			Set qcFilter = Nothing
+			Set qcTestSetFactory = Nothing
+			Set qcLabFolder = Nothing
+			Set qcLabTreeMgr = Nothing
+			Set qcTestFactory = Nothing
+			Set qcTreeMgr = Nothing
+			Set qcConnect = Nothing		
+		End If
+	End If
+	
+	Set ObjAttch = Nothing
+	Set ObjattachmentPath = Nothing
+	Set ObjCurrentTest = Nothing
+	On Error Goto 0
+
+End Function
+
+'************************************************************************************************************************************
+'Function Name : Fn_QCFolderPath 
+'Purpose : To Get the ALM Folder Structure
+'************************************************************************************************************************************
+Function Fn_QCFolderPath ( )
+
+	Dim qcTest
+	Dim qcfolder
+	Dim qcfolderName
+	Dim strPath
+
+	If Setting("IsInTestDirectorTest") Then
+		Set qcTest = QCUtil.CurrentTestSet
+		Set qcfolder = qcTest.TestSetFolder
+		qcfolderName = qcfolder.Name
+		strPath = qcfolderName
+
+		While qcfolderName <> "Root"
+			Set qcfolder = qcfolder.Father
+			qcfolderName = qcfolder.Name
+			strPath = qcfolderName & "\" & strPath
+		Wend
+
+		Fn_QCFolderPath = strPath
+	Else
+		Fn_QCFolderPath = ""
+	End If
+	
+	Set qcfolder = Nothing
+	Set qcTest = Nothing
+
+End Function
+
+'************************************************************************************************************************************
+'Function Name : Fn_QCTestDetails 
+'Purpose : To Update Test Details.
+'************************************************************************************************************************************
+Function Fn_QCTestDetails( strType, strText )
+
+	Dim wshShell
+	Dim strFilePath
+	Dim oFso
+	Dim strqcDetails
+	Dim strTestDetails
+	Const ForReading = 1, ForWriting = 2, ForAppending = 8
+
+	If Setting("IsInTestDirectorTest") Then
+		Set wshShell = CreateObject("WScript.Shell")
+		strFilePath = wshShell.ExpandEnvironmentStrings("%USERPROFILE%") & "\Desktop\Temp.txt"
+		Set wshShell = Nothing
+		Set oFso = CreateObject( "Scripting.FileSystemObject" )
+		If strType = "Create" Then
+			Set oFile = oFso.OpenTextFile( strFilePath, ForWriting, True )
+			oFile.WriteLine strText
+		ElseIf strType = "Update" Then
+			Set oFile = oFso.OpenTextFile( strFilePath, ForAppending, False )
+			oFile.Write strText
+		End If
+		oFile.Close
+	End If
+	
+	Set oFile = Nothing
+    Set oFso = Nothing
+
+End Function
+
+'************************************************************************************************************************************
+'Function Name : Fn_QCInstanceCreation 
+'Purpose : To create instance of Test in TestLab of ALM
+'************************************************************************************************************************************
+Function Fn_QCInstanceCreation ( )
+
+	Dim wshShell
+	Dim strFilePath
+	Dim oFso
+	Dim strFileData
+	Dim strTemp
+	Dim strqcDetails
+	Const ForReading = 1, ForWriting = 2, ForAppending = 8
+	
+	If Setting("IsInTestDirectorTest") Then
+		Set wshShell = CreateObject("WScript.Shell")
+		strFilePath = wshShell.ExpandEnvironmentStrings("%USERPROFILE%") & "\Desktop\Temp.txt"
+		Set wshShell = Nothing
+		
+		Set oFso = CreateObject("Scripting.FileSystemObject")
+		If oFso.FileExists( strFilePath ) Then
+			Set oFile = oFso.OpenTextFile( strFilePath, ForReading )
+			If Not oFile.AtEndOfLine Then
+				strFileData = oFile.ReadAll
+				oFile.Close
+				strTemp = Split( strFileData , Chr(10) )
+				strqcDetails = Split( strTemp(0), ";" )
+				Call Fn_QCLabInstanceCreate( Trim( strqcDetails(0) ), Trim( strqcDetails(1) ),  Trim( strqcDetails(2) ), Trim( strqcDetails(3) ), Trim( strTemp(1) ) )
+				oFso.DeleteFile ( strFilePath )
+			End If
+			Set oFile = Nothing
+		End If
+	End If
+	
+	Set oFso = Nothing
+
+End Function
+
+'************************************************************************************************************************************
+'Function Name : Fn_QCLabInstanceCreate 
+'Purpose : To create instance of Test in TestLab of ALM
+'************************************************************************************************************************************
+Function Fn_QCLabInstanceCreate( strQCLabPath, strQCTestName, intCurrentTestID, intCurrentSetID, strTestStatusDetails )
+
+	Dim qcConnect
+	Dim qcTreeMgr
+	Dim qcTestFactory
+	Dim qcLabTreeMgr
+	Dim qcLabFolder
+	Dim qcTestSetFactory
+	Dim qcFilter
+	Dim qcLst
+	Dim qcTestSet
+	Dim qctestInstanceFctry
+	Dim pTestInTestSetObj
+	Dim intTotalCaseCount
+	Dim intI
+	Dim strTempTstDetails
+	Dim strFlag
+	Dim strTemp
+	Dim strTestName
+	Dim strqcTempStatus
+	Dim pTestLst
+	Dim pTestItem
+
+	UID = Environment("UID")
+	Pwd = Environment("Pwd")
+	Domain =  Environment("Domain")
+	Project = Environment("Project")
+
+	Set qcConnect = CreateObject("TDAPIOLE80.TDConnection")
+	qcConnect.InitConnectionEx Environment("ALMURL")
+	qcConnect.Login  UID, Pwd
+	qcConnect.Connect Domain , Project
+
+	If (qcConnect.connected <> True) Then
+'		MsgBox "QC Project Failed to Connect"
+		WScript.Quit
+	End If
+
+	Set qcTreeMgr = qcConnect.TreeManager 
+	Set qcTestFactory = qcConnect.TestFactory 
+	Set qcLabTreeMgr = qcConnect.TestSetTreeManager
+	Set qcLabFolder = qcLabTreeMgr.NodeByPath( strQCLabPath )
+	Set qcTestSetFactory = qcLabFolder.TestSetFactory
+	Set qcFilter = qcTestSetFactory.Filter
+	qcFilter.Filter("CY_CYCLE") = strQCTestName
+
+	Set qcLst = qcTestSetFactory.NewList(qcFilter.Text)
+	If qcLst.Count = 0 Then 
+		Set qcTestSet = qcTestSetFactory.AddItem( Null )
+		qcTestSet.Field("CY_CYCLE") = strQCTestName
+		qcTestSet.Post
+	Else
+		Set qcTestSet = qcLst.Item(1)
+	End If
+
+	strTempTstDetails = Split( strTestStatusDetails, ";" )
+	strFlag = True
+	Set qctestInstanceFctry = qcTestSet.TSTestFactory
+	For intI = 0 To UBound( strTempTstDetails )
+		If strTempTstDetails( intI ) <> "" And intI <> 0 Then	
+		
+			Set pTestInTestSetObj = qctestInstanceFctry.AddItem( intCurrentTestID )			
+			strTemp = Split( strTempTstDetails( intI ), "-" )
+			strTestName = Trim( CStr( strTemp( 0 ) ) )
+			strqcTempStatus = Trim( CStr( strTemp( 1 ) ) )
+
+			pTestInTestSetObj.Field( "TC_USER_TEMPLATE_01" ) = strTestName
+			pTestInTestSetObj.Status = strqcTempStatus
+			pTestInTestSetObj.Post
+			AddTestToTestSet = True			
+			Set pTestInTestSetObj = Nothing
+			
+		ElseIf strTempTstDetails( intI ) <> "" And intI = 0 Then			
+			
+			Set pTestItem = qctestInstanceFctry.Filter
+			pTestItem.Filter("TC_TESTCYCL_ID") = CStr( intCurrentSetID )
+			Set pTestLst = qctestInstanceFctry.NewList( pTestItem.Text )
+			Set pTestInTestSetObj = pTestLst.Item( 1 )
+			
+			strTemp = Split( strTempTstDetails( intI ), "-" )
+			strTestName = Trim( CStr( strTemp( 0 ) ) )
+			strqcTempStatus = Trim( CStr( strTemp( 1 ) ) )
+			pTestInTestSetObj.Field( "TC_USER_TEMPLATE_01" ) = strTestName
+			pTestInTestSetObj.Status = strqcTempStatus 
+			pTestInTestSetObj.Post
+			
+			Set pTestItem = Nothing
+			Set pTestLst = Nothing
+			Set pTestInTestSetObj = Nothing
+			
+		End If
+	Next
+
+	Set qctestInstanceFctry = Nothing
+	Set qcTestSet = Nothing
+	Set qcLst = Nothing
+	Set qcFilter = Nothing
+	Set qcTestSetFactory = Nothing
+	Set qcLabFolder = Nothing
+	Set qcLabTreeMgr = Nothing
+	Set qcTestFactory = Nothing
+	Set qcTreeMgr = Nothing
+	Set qcConnect = Nothing
+
+End Function
+
+'*************************************************************************************************************************
+'	Function name	        :	Fn_QCLabStatusChange
+'	Description	            :	To change the status of a particular testcase in a Testset 
+'	Pre-Condition(s)	    :	ALM Lab folder should contain all Tests in particular Test Sets
+'  	Input Argument(s)	    :   Testcase Status from the main function
+'	Return Value(s)		    :	None
+'	Created By		        :	Sukanya Ramanathan / Suriya Prakash Ravi
+'	Created On		        :	22-Mar-2013
+'*************************************************************************************************************************
+'  function usage.
+
+'	Call the function at the end of each test in QTP to update the status in ALM
+'  		strTestName 		- Test case Name in ALM LAB folfer
+'		strTestSetName		- Test Set Name under which test cases are available in ALM LAB folfer
+'		strTestcaseStatus	- Test Case status ( Passed / Failed ) to be updated.
+'*************************************************************************************************************************
+
+Function Fn_QCLabStatusChange(strTestName, strTestSetName, strTestcaseStatus)
+
+	On Error Resume Next
+	Dim qcConnect
+	Dim qcTreeMgr
+	Dim qcTestFactory
+	Dim qcLabTreeMgr
+	Dim qcLabFolder
+	Dim qcTestSetFactory
+	Dim qcFilter
+	Dim qcLst
+	Dim qcTestSet
+	Dim qctestInstanceFctry
+	Dim pTestInTestSetObj
+	Dim intTotalCaseCount
+	Dim intI
+	Dim strTempTstDetails
+	Dim strFlag
+	Dim strTemp
+	Dim strqcTempStatus
+	Dim pTestLst
+	Dim pTestItem
+
+	If LCase( Environment( "ALMUpdate" ) ) = "yes" Then
+		strQCLabPath = Environment("strQCLabPath")
+		UID = Environment("UID")
+		Pwd = Environment("Pwd")
+		Domain =  Environment("Domain")
+		Project = Environment("Project")
+		strTestStatusDetails = strTestName&"--"&strTestcaseStatus
+		
+		Set qcConnect = CreateObject("TDAPIOLE80.TDConnection")
+		qcConnect.InitConnectionEx Environment("ALMURL")
+		qcConnect.Login  UID, Pwd
+		qcConnect.Connect Domain , Project
+	
+		If (qcConnect.connected <> True) Then		
+			Print "QC Project Failed to Connect"			
+		Else	
+			Set qcTreeMgr = qcConnect.TreeManager 
+			Set qcTestFactory = qcConnect.TestFactory 
+			Set qcLabTreeMgr = qcConnect.TestSetTreeManager
+			Set qcLabFolder = qcLabTreeMgr.NodeByPath( strQCLabPath )
+			Set qcTestSetFactory = qcLabFolder.TestSetFactory
+			Set qcFilter = qcTestSetFactory.Filter
+			qcFilter.Filter("CY_CYCLE") = "'"& strTestSetName &"'" 'strQCTestName
+		
+			Set qcLst = qcTestSetFactory.NewList(qcFilter.Text)
+			Set qcTestSet = qcLst.Item(1)
+		
+			strTempTstDetails = Split( strTestStatusDetails, "--" )
+			strFlag = True
+			Set qctestInstanceFctry = qcTestSet.TSTestFactory
+			Set pTestItem = qctestInstanceFctry.Filter 		
+			pTestItem.Filter("TS_NAME") =  "'"& strTestName &"'" 'Trim( CStr( strTempTstDetails( 0 ) ) )
+			Set pTestLst = qctestInstanceFctry.NewList( pTestItem.Text )
+			If pTestLst.Count > 0 Then
+			
+				Set pTestInTestSetObj = pTestLst.Item( 1 )				
+				strqcTempStatus = Trim( CStr( strTempTstDetails( 1 ) ) )
+				pTestInTestSetObj.Status = strTestcaseStatus 
+				pTestInTestSetObj.Post
+				Set pTestInTestSetObj = Nothing
+			
+			End If
+			
+			Set pTestItem = Nothing
+			Set pTestLst = Nothing					
+			Set qctestInstanceFctry = Nothing
+			Set qcTestSet = Nothing
+			Set qcLst = Nothing
+			Set qcFilter = Nothing
+			Set qcTestSetFactory = Nothing
+			Set qcLabFolder = Nothing
+			Set qcLabTreeMgr = Nothing
+			Set qcTestFactory = Nothing
+			Set qcTreeMgr = Nothing
+			Set qcConnect = Nothing		
+		End If
+	End If
+	On Error Goto 0
+		
+End Function
+'------------------------------------------------------- End Of Fucctions -----------------------------------------------------------
