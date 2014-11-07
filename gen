@@ -1,0 +1,611 @@
+' ------------------------------------------------ List of Functions ------------------------------------------------------------
+'Fn_Module
+'Fn_Interface 
+'Fn_Configuration
+'Fn_CurrentKeyword
+'Fn_TestCaseCollection
+'Fn_TestCaseSelector
+'Fn_GetPoint
+'Fn_GetSize
+'Fn_oPoint
+'Fn_Label
+'Fn_RadioButton
+'Fn_CheckBox
+'Fn_TextBox
+'Fn_ComboBox
+'Fn_Button
+'------------------------------------------------------- End Of List -----------------------------------------------------------
+
+'************************************************************************************************************************************
+'Function Name : Fn_Module
+'Purpose : Fetches a function name based upon the keyword in the module sheet
+'************************************************************************************************************************************
+Function Fn_Module ( strCurModule )
+
+	Dim ModCompletionFlag
+	Dim strSheetName
+	Dim strTempCall
+	Dim strTempFn
+	Dim intTemp
+	Dim intI
+	Dim sheetFlag
+
+	If Environment( "Driver" ) Then  
+        intTemp = Environment("objFlowWorkBook").Worksheets.Count
+		sheetFlag = False
+		For intI = 1 To intTemp
+			strSheetName = Environment("objFlowWorkBook").Worksheets( intI ).Name
+			If strSheetName = "Driver" Then
+				sheetFlag = True
+			End If
+		Next
+		If sheetFlag Then
+			 Set objWorkSheetDriver = Environment( "objFlowWorkBook" ).Worksheets( "Driver" )
+			 intDriverColCnt = objWorkSheetDriver.UsedRange.Columns.Count
+			 intDriverRowCnt = objWorkSheetDriver.UsedRange.Rows.Count
+' ********************************   Environment  varaible started storing  in Environment header ( Row 1 of Driver sheet is header and  Module row is Functional Name) ********************************
+			 For driverRows = 2 to intDriverRowCnt
+						If Trim(objWorkSheetDriver.Rows(driverRows).Columns(1).Value) = strCurModule Then
+						For driverCols = 2 to intDriverColCnt
+							Environment(Trim(objWorkSheetDriver.Rows(1).Columns(driverCols).Value)) =  Trim(objWorkSheetDriver.Rows(driverRows).Columns(driverCols).Value)
+						Next
+						Environment("Driver") = False
+						Exit For
+						End If
+			 Next	
+		End If
+' ********************************   Environment  varaible Completes storing  in Environment header ( Row 1 of Driver sheet is header and  Module row is Functional Name) *****************************
+	End If
+
+	Environment( "teststatusFlag" ) = True
+	Set objWorkSheetModule = Environment("objFlowWorkBook").Worksheets(strCurModule)
+' ************************************************   Iteration starts at row level ( Each row is a test case ) ***********************************************************************************************************************
+	For cols = 1 to Environment( "intCurModColCnt" )
+		If InStr(1, Trim( LCase( objWorkSheetModule.Rows( 1 ).Columns( cols ).Value ) ), "keyword", 1 ) > 0 Then
+
+			strTempCall = Trim( objWorkSheetModule.Rows( 1 ).Columns( cols ).Value )
+			strTempFn = Trim( Environment( objWorkSheetModule.Rows( 1 ).Columns( cols ).Value ) )
+
+			If strTempFn <> "" Then
+				If Len( strTempFn ) > 6 Then
+					If LCase( Left( strTempFn, 7 ) ) = "keyword" Then
+						strTempFn = "KeywordCall"
+					End If
+				End If
+			
+				Select Case strTempFn
+		
+					Case "Yes", "KeywordCall"
+						strFuncName = Environment( "Driver"&Trim( strTempCall ) ) 
+						Call Fn_CurrentKeyword ( LCase( strTempCall ) )
+						Execute("Call "& strFuncName &"( )") 
+	
+					Case "No"
+						
+					Case Else
+						Call Fn_CurrentKeyword ( strTempFn )
+						Execute("Call "& strTempFn &"( )") 
+	
+				End Select
+			End If
+
+			If Environment( "TestCaseFlag" ) = False Then
+				Exit For
+			End If
+
+		End If
+	Next
+
+'	Updating the results for Completed Test Case
+	Call Fn_UpdateTestResult( )
+	teststatus = Environment( "OvrTstStsReport" )
+	If Environment( "teststatusFlag" ) Then
+		teststatus(Environment( "intCurModule" ),0) = teststatus(Environment( "intCurModule" ),0) + 1
+	Else
+		teststatus(Environment( "intCurModule" ),1) = teststatus(Environment( "intCurModule" ),1) + 1
+	End If
+	Environment( "OvrTstStsReport" ) = teststatus
+
+End Function
+
+'************************************************************************************************************************************
+'Function Name : Fn_Interface 
+'Purpose : Creates a HTML interface to provide necessary initial data for the application
+'************************************************************************************************************************************
+
+Function Fn_Interface (  )
+
+    Dim intI
+	Dim intPositionY
+	Dim objCollection
+	Dim objItems
+	Dim oForm
+	Dim flagTestCase
+
+	Set objCollection = CreateObject( "Scripting.Dictionary" )
+	Set oForm = DOTNetFactory.CreateInstance("System.Windows.Forms.Form", "System.Windows.Forms")
+	intPositionY = 30
+
+	objCollection.Add "lblAppPath", Fn_Label( "Application Path", "lblAppPath", 35, intPositionY )
+	objCollection.Add "txtAppPath", Fn_TextBox( "Application Path","txtAppPath",235,intPositionY )
+	intPositionY = intPositionY + 25
+	objCollection.Add "lblDtName", Fn_Label( "Datatable Name", "lblDtName", 35, intPositionY )
+	objCollection.Add "txtDtName", Fn_TextBox( "DataSheet.xls","txtDtName",235,intPositionY )
+	intPositionY = intPositionY + 25
+	objCollection.Add "lblRptFmt", Fn_Label( "Report Format", "lblRptFmt", 35, intPositionY )
+	objCollection.Add "cmbRptFmt", Fn_ComboBox( "cmbRptFmt","HTML Report;Excel Report",235,intPositionY )
+	intPositionY = intPositionY + 65
+
+	objCollection.Add "lblModules", Fn_Label( "Select Modules to Perform Test", "lblModules", 35, intPositionY )
+	intPositionY = intPositionY + 20
+	objCollection.Add "lblDesign1", Fn_Label( "-------------------------------------------------------", "lblDesign1", 60, intPositionY )
+	intPositionY = intPositionY + 20
+	objCollection.Add "chkAllModAllTestCase", Fn_CheckBox( "Run All Test Cases in All Modules", "chkAllModAllTestCase", 60, intPositionY )
+	intPositionY = intPositionY + 25
+	objCollection.Add "chkAllTestCaseSelMod", Fn_CheckBox( "Run All Test Cases in Selected Modules", "chkAllTestCaseSelMod", 60, intPositionY )
+	intPositionY = intPositionY + 20
+	objCollection.Add "lblDesign2", Fn_Label( "-------------------------------------------------------", "lblDesign2", 60, intPositionY )
+	intPositionY = intPositionY + 25	
+	objCollection.Add "ModuleName1", Fn_CheckBox( "ModuleName1 ", "ModuleName1", 60, intPositionY )
+	intPositionY = intPositionY + 25
+	objCollection.Add "ModuleName2", Fn_CheckBox( "ModuleName2 ", "ModuleName2", 60, intPositionY )
+	intPositionY = intPositionY + 25
+	objCollection.Add "ModuleName3", Fn_CheckBox( "ModuleName3 ", "ModuleName3", 60, intPositionY )
+	intPositionY = intPositionY + 40
+	objCollection.Add "Submit", Fn_Button( "Submit", "Submit", 95, intPositionY )
+	objCollection.Add "Reset", Fn_Button( "Reset", "Reset", 240, intPositionY )
+
+	With oForm
+		.Text = "iGen Framework"
+		.Height = 410
+		.Width = 450
+        .Location.X = 100
+        .Location.Y = 100
+        .Minimizebox = False
+        .Maximizebox = False
+	End With
+
+	objItems = objCollection.Items
+	For intI = 0 To objCollection.Count - 1
+		oForm.Controls.Add objItems( intI )
+	Next
+
+	oForm.CancelButton = objCollection.Item( "Submit" )	
+	oForm.Activate
+	oForm.ShowDialog
+
+	Environment("AppPath") = objCollection.Item( "txtAppPath" ).Text 
+	Environment("DTName") = objCollection.Item( "txtDtName" ).Text
+	Environment("Output") = Trim( Replace( objCollection.Item( "cmbRptFmt" ).Text, "Report", "" ) )
+
+	Environment( "Modules" ) = "@@"
+	If objCollection.Item( "chkAllModAllTestCase" ).checked Then
+		Environment( "AllTestCase" ) = True
+		flagTestCase = True
+	ElseIf objCollection.Item( "chkAllTestCaseSelMod" ).checked Then
+		Environment( "AllTestCase" ) = True
+		flagTestCase = False
+	Else
+		Environment( "AllTestCase" ) = False
+		flagTestCase = False
+	End If
+	
+	If objCollection.Item( "ModuleName1" ).checked Or flagTestCase Then
+		Environment( "Modules" ) = Environment("Modules") & "ModuleName1" & "@@"
+	End If
+	If objCollection.Item( "ModuleName2" ).checked Or flagTestCase Then
+		Environment( "Modules" ) = Environment("Modules") & "ModuleName2" & "@@"
+	End If
+	If objCollection.Item( "ModuleName3" ).checked Or flagTestCase Then
+		Environment( "Modules" ) = Environment("Modules") & "ModuleName3" & "@@"
+	End If
+	
+	objCollection.RemoveAll
+	Set objCollection = Nothing
+	Set oForm = Nothing
+	Set objWorkSheet = Nothing
+	SystemUtil.CloseProcessByName ("excel.exe")
+	
+	If Left(Environment( "Modules" ),2) = "@@" Then
+		Environment( "Modules" ) = Right(Environment( "Modules" ),Len(Environment( "Modules" ))-2)
+	End If
+	If Right(Environment( "Modules" ),2) = "@@" Then
+		Environment( "Modules" ) = Left(Environment( "Modules" ),Len(Environment( "Modules" ))-2)
+	End If
+
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_Configuration
+'*************************************************************************************************************
+Function Fn_Configuration ( strCheck )
+
+	Dim strResult
+
+	If LCase(strCheck) = "setup" Then
+		Environment.LoadFromFile(Environment("TestLocation") &"\InputData\Environment.xml")
+		Environment("DatatableLocation") = Environment("TestLocation") &"\InputData\"& Environment( "DTName" )
+		Environment("Result_Location")  = Environment("TestLocation") &"\OutputFiles\"
+		Environment("ScreenShot") = Environment("TestLocation") &"\OutputFiles\ScreenShot\"
+        Environment ( "ModuleCount" ) = 1
+		If Setting("IsInTestDirectorTest") Then
+			Call Fn_QCTestDetails ( "Create", Fn_QCFolderPath( ) &";"& QCUtil.CurrentTestSet.Name &";"& QCUtil.CurrentRun.TestId &";"& QCutil.CurrentTestSetTest.ID )
+		End If
+	ElseIf LCase(strCheck) = "modulestart" Then
+		If Environment("Output") = "HTML" Then
+			Call Fn_CreateHTML( "ModuleStart", "Report" )
+		End If
+'		RepositoriesCollection.Add( Environment("TestLocation") &"\Repository\Repository.tsr" )
+	ElseIf LCase(strCheck) = "moduleend" Then
+		If Environment("Output") = "HTML" Then
+			Call Fn_CreateHTML( "ModuleEnd", "Report" )
+		End If
+        Environment ( "ModuleCount" ) = Environment ( "ModuleCount" ) + 1
+'		RepositoriesCollection.RemoveAll
+	ElseIf LCase(strCheck) = "end" Then
+		If Environment("Output") = "HTML" Then
+			Call Fn_CreateHTML( "End", "Report" )
+		End If
+        Environment ( "ModuleCount" ) = Environment ( "ModuleCount" ) + 1
+		Call Fn_QCResultUpdate( )
+		Call Fn_QCInstanceCreation( )
+	End If
+
+End Function
+
+
+'*************************************************************************************************************
+' Function : Fn_CurrentKeyword
+' Functionality : To Setup any any variables/prerequesited before executin the functions.
+'*************************************************************************************************************
+Function Fn_CurrentKeyword( CurrQueue )
+
+			If CurrQueue = "keyword1" Then
+
+			ElseIf CurrQueue = "keyword2" Then
+
+			ElseIf CurrQueue = "keyword3" Then
+
+			ElseIf CurrQueue = "keyword4" Then
+
+			ElseIf CurrQueue = "keyword5" Then
+
+			End If
+
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_TestCaseCollection
+'*************************************************************************************************************
+Function Fn_TestCaseCollection( objFlowWorkBook )
+
+	Dim intI
+	Dim arrModules
+	Dim objWorkSheet
+	Dim objTestCaseCollection( )
+
+	arrModules = Split(Environment( "Modules" ), "@@", -1, 1)
+	For intI = 0 To UBound( arrModules )
+        If Trim( arrModules( intI ) ) <> "" Then
+			Set objWorkSheet = objFlowWorkBook.Worksheets( Trim ( arrModules ( intI ) ) )
+			ReDim Preserve objTestCaseCollection( intI )
+			Set objTestCaseCollection( intI ) = Fn_TestCaseSelector( objWorkSheet, Trim ( arrModules ( intI ) ) )
+			Set objWorkSheet =  Nothing
+		End If
+	Next
+	Fn_TestCaseCollection = objTestCaseCollection
+
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_TestCaseSelector
+'*************************************************************************************************************
+Function Fn_TestCaseSelector ( objWorkSheet, strModule )
+
+	Dim intI
+	Dim intJ
+	Dim intPositionY
+	Dim objCollection
+	Dim oForm
+	Dim dResult
+	Dim intRowCnt
+	Dim strTestCase
+	Dim strDesc
+	Dim arrTemp
+	Dim strTemp
+
+	Set objCollection = CreateObject( "Scripting.Dictionary" )
+	Set oForm = DOTNetFactory.CreateInstance("System.Windows.Forms.Form", "System.Windows.Forms")
+	Set dResult = DotNetFactory.CreateInstance("System.Windows.Forms.DialogResult", "System.Windows.Forms")
+
+	intRowCnt = objWorkSheet.UsedRange.Rows.Count
+	intPositionY = 25
+	intJ = 0
+
+	objCollection.Add "lblDesign1", Fn_Label( "*******************************************************************************************", "lblDesign1", 30, intPositionY )
+	intPositionY = intPositionY + 20
+	objCollection.Add "lblInstruction", Fn_Label( "Select the Test Cases to Perform Test", "lblInstruction", 135, intPositionY )
+	intPositionY = intPositionY + 25
+	objCollection.Add "lblDesign2", Fn_Label( "*******************************************************************************************", "lblDesign2", 30, intPositionY )
+	intPositionY = intPositionY + 35
+	objCollection.Add "lblTestCase", Fn_Label( "TestCases", "lblTestCase", 45, intPositionY )
+	objCollection.Add "lblTestDesc", Fn_Label( "Description", "lblTestDesc", 175, intPositionY )
+	intPositionY = intPositionY + 25
+
+	With oForm
+		.Text = strModule
+		.Height = 450
+		.Width = 500
+		.Controls.Add objCollection.Item( "lblDesign1" )
+		.Controls.Add objCollection.Item( "lblInstruction" )
+		.Controls.Add objCollection.Item( "lblDesign2" )
+		.Controls.Add objCollection.Item( "lblTestCase" )
+		.Controls.Add objCollection.Item( "lblTestDesc" )
+	End With
+
+	For intI = 1 To intRowCnt - 1
+
+		strTestCase = Trim( objWorkSheet.Rows( intI + 1 ).Columns( 1 ).Value )
+		strDesc = Trim( objWorkSheet.Rows( intI + 1 ).Columns( 2 ).Value )
+		If strTestCase <> "" Then
+			intJ = intJ + 1
+			objCollection.Add "chkTestCase"& intJ, Fn_CheckBox( strTestCase, "chkTestCase"& intJ, 35, intPositionY )
+			objCollection.Add "lblTestDesc"& intJ, Fn_Label( strDesc, "lblTestDesc"& intJ, 175, intPositionY + 5 )
+			intPositionY = intPositionY + 25
+			oForm.Controls.Add objCollection.Item( "chkTestCase"& intJ )
+			oForm.Controls.Add objCollection.Item( "lblTestDesc"& intJ )
+		End If
+
+	Next
+
+	intPositionY = intPositionY + 30
+	objCollection.Add "btSubmit", Fn_Button( "Submit", "btSubmit", 35, intPositionY )
+	objCollection.Add "btSelectAll", Fn_Button( "SelectAll", "btSelectAll", 175, intPositionY )
+	objCollection.Add "btDeSelectAll", Fn_Button( "Reset", "btDeSelectAll", 315, intPositionY )
+	intPositionY = intPositionY + 40
+	objCollection.Add "lblEnd", Fn_Label( ".", "lblEnd", 55, intPositionY )
+
+	With oForm
+		.Controls.Add objCollection.Item( "btSubmit" )
+		.Controls.Add objCollection.Item( "btSelectAll" )
+		.Controls.Add objCollection.Item( "btDeSelectAll" )
+		.CancelButton = objCollection.Item( "btSubmit" )
+	End With
+
+	If CInt( oForm.Height ) > CInt( intPositionY ) Then
+		oForm.Height = intPositionY + 90
+	Else
+		oForm.Controls.Add objCollection.Item( "lblEnd" )
+		oForm.AutoScroll = True
+	End If	
+
+	If Not Environment( "AllTestCase" ) Then
+		oForm.Activate
+		oForm.ShowDialog	
+	End If
+
+	Do
+		If oForm.DialogResult = dResult.Yes Or Environment( "AllTestCase" ) Then
+			For intI = 1 To intJ	
+				objCollection.Item( "chkTestCase"& intI ).Checked = True
+			Next
+			If Environment( "AllTestCase" ) Then
+				Exit Do
+			End If
+			oForm.Activate
+			oForm.ShowDialog
+		End If
+	
+		If oForm.DialogResult = dResult.No Then
+			For intI = 1 To intJ	
+				objCollection.Item( "chkTestCase"& intI ).Checked = False	
+			Next
+			oForm.Activate
+			oForm.ShowDialog
+		End If
+	
+		If oForm.DialogResult = dResult.Cancel Then
+			Exit Do
+		End If
+	Loop
+
+	strTemp = ""
+	For intI = 1 To intJ
+
+		If objCollection.Item( "chkTestCase"& intI ).Checked Then
+			strTemp = strTemp &";"& objCollection.Item( "chkTestCase"& intI ).Text
+		End If
+
+	Next
+	objCollection.RemoveAll
+	Set objCollection = Nothing
+	Set Fn_TestCaseSelector = CreateObject( "Scripting.Dictionary" )
+
+	arrTemp = Split( strTemp, ";" )
+	For intI=0 To UBound( arrTemp )
+		If arrTemp( intI ) <> "" Then
+			Fn_TestCaseSelector.Add "Case"& intI,  arrTemp( intI )
+		End If
+	Next
+
+	Set oForm = Nothing
+	Set dResult = Nothing
+
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_GetPoint
+'*************************************************************************************************************
+Function Fn_GetPoint ( x, y )
+
+'	Create a POINT object with constructor int, int
+	Set Fn_GetPoint = DotNetFactory("System.Drawing.Point","System.Drawing", x, y)
+
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_GetSize
+'*************************************************************************************************************
+Function Fn_GetSize( x, y )
+
+'	Create a Size object with constructor int, int
+	Set Fn_GetSize = DotNetFactory("System.Drawing.Size","System.Drawing", x, y)
+
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_oPoint
+'*************************************************************************************************************
+Function Fn_oPoint ( intX, intY )
+
+    Set Fn_oPoint = DotNetFactory.CreateInstance("System.Drawing.Point", "System.Drawing", x, y)
+
+	With Fn_oPoint
+		.x = intX
+		.y = intY
+	End With
+
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_Label
+'*************************************************************************************************************
+Function Fn_Label( lblText, lblName, xx, yy )
+
+	Set Fn_Label = DOTNetFactory.CreateInstance("System.Windows.Forms.Label", "System.Windows.Forms")
+
+'	Label Properties
+	With Fn_Label
+		.Text = lblText
+		.Name = lblName
+		.Size = Fn_GetSize( ( Len( lblText ) + 5 )*7, 20)
+		.Location = Fn_oPoint( xx, yy )
+	End With
+
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_RadioButton
+'*************************************************************************************************************
+Function Fn_RadioButton( radText, radName, xx, yy )
+
+	Set Fn_RadioButton = DOTNetFactory.CreateInstance("System.Windows.Forms.RadioButton", "System.Windows.Forms")
+
+'	RadioButton Properties
+	With Fn_RadioButton
+		.Text = radText
+		.Name = radName
+		.Location = Fn_oPoint( xx, yy )
+	End With
+
+End Function
+
+'*************************************************************************************************************
+' Function : CheckBox
+'*************************************************************************************************************
+Function Fn_CheckBox ( chkText, chkName, xx, yy )
+
+	Set Fn_CheckBox = DOTNetFactory.CreateInstance("System.Windows.Forms.CheckBox", "System.Windows.Forms")
+
+'	CheckBox Properties
+	With Fn_CheckBox
+		.Text = chkText
+		.Name = chkName
+		.Size = Fn_GetSize( ( Len( chkText ) + 5 )*8, 20)
+		.Location = Fn_oPoint( xx, yy )
+	End With
+
+End Function
+
+
+
+'*************************************************************************************************************
+' Function : Fn_EncodedTextBox
+'*************************************************************************************************************
+Function Fn_EncodedTextBox ( txtText, txtName, xx, yy )
+
+	Set Fn_EncodedTextBox = DOTNetFactory.CreateInstance("System.Windows.Forms.TextBox", "System.Windows.Forms")
+
+'	CheckBox Properties
+	With Fn_EncodedTextBox
+		.UseSystemPasswordChar = True
+		.Text = txtText
+		.Name = txtName
+		.Width = 150
+		.Location = Fn_oPoint( xx, yy )
+	End With
+
+End Function
+
+
+
+'*************************************************************************************************************
+' Function : Fn_TextBox
+'*************************************************************************************************************
+Function Fn_TextBox ( txtText, txtName, xx, yy )
+
+	Set Fn_TextBox = DOTNetFactory.CreateInstance("System.Windows.Forms.TextBox", "System.Windows.Forms")
+
+'	CheckBox Properties
+	With Fn_TextBox
+        .Text = txtText
+		.Name = txtName
+		.Width = 150
+		.Location = Fn_oPoint( xx, yy )
+	End With
+
+End Function
+
+'*************************************************************************************************************
+' Function : ComboBox
+'*************************************************************************************************************
+Function Fn_ComboBox ( cmbName, strList, xx, yy )
+
+	Dim strTemp
+	Dim intI
+	Set Fn_ComboBox = DotNetFactory("System.Windows.Forms.ComboBox","System.Windows.Forms")
+
+	strTemp = Split( strList, ";" )	
+	With Fn_ComboBox
+		.Name = cmbName
+		.TabIndex = 3
+		.Width = 150
+		
+'		Clear all items in the combo box list
+		.Items.Clear
+		
+'		Add items to the combo box list
+		For intI = 0 To UBound ( strTemp )
+			.Items.Add strTemp( intI )
+		Next
+		.SelectedIndex = 0
+		.Location = Fn_oPoint( xx, yy )
+	End with
+	
+End Function
+
+'*************************************************************************************************************
+' Function : Fn_Button
+'*************************************************************************************************************
+Function Fn_Button( btText, btName, xx, yy )
+
+	Set Fn_Button = DotNetFactory.CreateInstance("System.Windows.Forms.Button", "System.Windows.Forms")
+	Set dResult = DotNetFactory.CreateInstance("System.Windows.Forms.DialogResult", "System.Windows.Forms")
+	
+	With Fn_Button
+		.Text = btText
+		.Name = btName
+		.Location = Fn_oPoint( xx, yy )
+		.Width = 100
+	End with
+
+	If btText = "SelectAll" Then
+		Fn_Button.DialogResult = dResult.Yes
+	ElseIf btText = "Reset" Then
+		Fn_Button.DialogResult = dResult.No
+	ElseIf btText = "Submit" And btName = "btSubmit" Then
+		Fn_Button.DialogResult = dResult.Cancel
+	End If
+
+End Function
+'------------------------------------------------------- End Of Fucctions -----------------------------------------------------------
